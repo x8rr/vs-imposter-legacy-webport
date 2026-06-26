@@ -56,6 +56,7 @@ jobs:
           cd engine-source
           haxelib setup ~/haxelib
           haxelib install hmm --quiet
+          cd engine-source
           haxelib run hmm install --quiet
 
       # ── 4. HTML5 compatibility patches ──────────────────────────────────────
