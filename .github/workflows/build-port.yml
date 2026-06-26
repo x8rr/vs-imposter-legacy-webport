@@ -51,6 +51,11 @@ jobs:
           echo "Processing MP4 files to prevent web build crashes..."
           find . -name "*.mp4" -type f -exec mv {} {}.disabled \;
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Setup Haxe
         uses: krdlab/setup-haxe@master
         with:
