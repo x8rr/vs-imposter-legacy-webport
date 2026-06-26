@@ -53,7 +53,6 @@ jobs:
 
       - name: Install Haxelibs
         run: |
-          cd engine-source
           haxelib setup ~/haxelib
           haxelib install hmm --quiet
           cd engine-source
