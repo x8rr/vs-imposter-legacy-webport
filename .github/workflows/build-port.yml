@@ -77,24 +77,54 @@ jobs:
       - name: Patch HTML5 incompatible code (Mock Sys)
         run: |
           cd engine-source
-          echo 'class FileSystem { public static function absolutePath(path:String) return path; public static function exists(path:String) return false; public static function readDirectory(path:String):Array<String> return []; public static function isDirectory(path:String) return false; public static function stat(path:String) return null; public static function fullPath(path:String) return path; public static function createDirectory(path:String) {} public static function deleteFile(path:String) {} public static function deleteDirectory(path:String) {} }' > source/FileSystem.hx
-          echo 'class File { public static function getContent(path:String) return ""; public static function getBytes(path:String) return null; public static function saveContent(path:String, c:String) return; public static function saveBytes(path:String, b:Dynamic) return; public static function copy(s:String, d:String) {} }' > source/File.hx
-          echo 'class Sys { public static function exit(code:Int) {} public static function sleep(t:Float) {} public static function command(c:String, ?a:Array<String>) return 0; public static function args():Array<String> return []; public static function getCwd() return ""; public static function setCwd(s:String) {} public static function print(v:Dynamic) {} public static function println(v:Dynamic) {} public static function environment() return new haxe.ds.StringMap<String>(); public static function getEnv(s:String) return ""; public static function programPath() return ""; }' > source/Sys.hx
-          echo 'class Process { public var stdout:Dynamic; public var stderr:Dynamic; public function new(c:String, ?a:Dynamic) { stdout = { readAll: function() return { toString: function() return "" }, readLine: function() return "" }; stderr = stdout; } public function exitCode(b:Bool=true) return 0; public function close() {} }' > source/Process.hx
-          echo 'class Thread { public static function create(f:Void->Void) { f(); } public static function readMessage(b:Bool) return null; public static function sendMessage(m:Dynamic) {} }' > source/Thread.hx
-          echo 'class Mutex { public function new() {} public function acquire() {} public function release() {} }' > source/Mutex.hx
-          echo 'class FixedThreadPool { public function new(size:Int) {} public function run(f:Void->Void) { f(); } public function shutdown() {} }' > source/FixedThreadPool.hx
-          
-          sed -i -e '/discord_rpc/d' -e '/discord-rpc/d' -e '/linc_luajit/d' Project.xml || true
-          mkdir -p source/hxdiscord_rpc
-          echo 'package hxdiscord_rpc; class Discord { public static function Initialize(a:String,b:Bool,c:Dynamic){} public static function Shutdown(){} public static function RunCallbacks(){} public static function UpdatePresence(a:Dynamic){} public static function ClearPresence(){} }' > source/hxdiscord_rpc/Discord.hx
-          echo 'package hxdiscord_rpc; class Types { public static inline var DISCORD_REPLY_NO=0; public static inline var DISCORD_REPLY_YES=1; public static inline var DISCORD_REPLY_IGNORE=2; }' > source/hxdiscord_rpc/Types.hx
-          echo 'package hxdiscord_rpc; typedef DiscordPresence = Dynamic;' > source/hxdiscord_rpc/DiscordPresence.hx
-          echo 'package hxdiscord_rpc; typedef DiscordRichPresence = Dynamic;' > source/hxdiscord_rpc/DiscordRichPresence.hx
-          # Replace the engine's Discord backend with a no-op so hxdiscord_rpc types are never referenced
-          printf 'package backend;\nclass DiscordClient {\n  public static var isInitialized:Bool = false;\n  public static function initialize() {}\n  public static function shutdown() {}\n  public static function changePresence(details:String, ?state:String, ?smallImageKey:String, ?hasStartTimestamp:Bool, ?endTimestamp:Float) {}\n}\n' > source/backend/Discord.hx
 
-          find source -name "*.hx" -type f -exec sed -i -e 's/sys\.FileSystem/FileSystem/g'                                                           -e 's/sys\.io\.File/File/g'                                                           -e 's/sys\.io\.Process/Process/g'                                                           -e 's/sys\.thread\.Thread/Thread/g'                                                           -e 's/sys\.thread\.Mutex/Mutex/g'                                                           -e 's/sys\.thread\.FixedThreadPool/FixedThreadPool/g'                                                           -e '/import cpp/d'                                                           -e 's/cpp\.[a-zA-Z0-9_]+/Dynamic/g'                                                           -e '/import llua/d'                                                           -e 's/llua\.[a-zA-Z0-9_]+/Dynamic/g' {} +
+          # Shadow unavailable sys.* stdlib classes with no-op stubs.
+          # Putting them at source/sys/... means the compiler finds them via classpath
+          # before the native (HTML5-unavailable) versions, with no name conflicts.
+          mkdir -p source/sys/io source/sys/thread
+
+          printf 'package sys;\nclass FileSystem {\n  public static function absolutePath(p:String) return p;\n  public static function exists(p:String) return false;\n  public static function readDirectory(p:String):Array<String> return [];\n  public static function isDirectory(p:String) return false;\n  public static function stat(p:String) return null;\n  public static function fullPath(p:String) return p;\n  public static function createDirectory(p:String) {}\n  public static function deleteFile(p:String) {}\n  public static function deleteDirectory(p:String) {}\n}\n' > source/sys/FileSystem.hx
+
+          printf 'package sys.io;\nclass File {\n  public static function getContent(p:String) return "";\n  public static function getBytes(p:String) return null;\n  public static function saveContent(p:String, c:String) {}\n  public static function saveBytes(p:String, b:Dynamic) {}\n  public static function copy(s:String, d:String) {}\n}\n' > source/sys/io/File.hx
+
+          printf 'package sys.io;\nclass Process {\n  public var stdout:Dynamic;\n  public var stderr:Dynamic;\n  public function new(c:String, ?a:Dynamic) { stdout = { readAll: function() return { toString: function() return "" }, readLine: function() return "" }; stderr = stdout; }\n  public function exitCode(b:Bool=true) return 0;\n  public function close() {}\n}\n' > source/sys/io/Process.hx
+
+          printf 'package sys.thread;\nclass Thread {\n  public static function create(f:Void->Void) { f(); }\n  public static function readMessage(b:Bool) return null;\n  public static function sendMessage(m:Dynamic) {}\n}\n' > source/sys/thread/Thread.hx
+
+          printf 'package sys.thread;\nclass Mutex {\n  public function new() {}\n  public function acquire() {}\n  public function release() {}\n}\n' > source/sys/thread/Mutex.hx
+
+          printf 'package sys.thread;\nclass FixedThreadPool {\n  public function new(size:Int) {}\n  public function run(f:Void->Void) { f(); }\n  public function shutdown() {}\n}\n' > source/sys/thread/FixedThreadPool.hx
+
+          printf 'class Sys {\n  public static function exit(code:Int) {}\n  public static function sleep(t:Float) {}\n  public static function command(c:String, ?a:Array<String>) return 0;\n  public static function args():Array<String> return [];\n  public static function getCwd() return "";\n  public static function setCwd(s:String) {}\n  public static function print(v:Dynamic) {}\n  public static function println(v:Dynamic) {}\n  public static function environment() return new haxe.ds.StringMap<String>();\n  public static function getEnv(s:String) return "";\n  public static function programPath() return "";\n}\n' > source/Sys.hx
+
+          # Disable discord, lua, and DISCORD_ALLOWED define in project config
+          sed -i -e '/discord_rpc/d' -e '/discord-rpc/d' -e '/linc_luajit/d' -e '/DISCORD_ALLOWED/d' Project.xml || true
+
+          # Stub hxdiscord_rpc package
+          mkdir -p source/hxdiscord_rpc
+          printf 'package hxdiscord_rpc;\nclass Discord {\n  public static function Initialize(a:String,b:Bool,c:Dynamic){}\n  public static function Shutdown(){}\n  public static function RunCallbacks(){}\n  public static function UpdatePresence(a:Dynamic){}\n  public static function ClearPresence(){}\n}\n' > source/hxdiscord_rpc/Discord.hx
+          printf 'package hxdiscord_rpc;\nclass Types {\n  public static inline var DISCORD_REPLY_NO=0;\n  public static inline var DISCORD_REPLY_YES=1;\n  public static inline var DISCORD_REPLY_IGNORE=2;\n}\n' > source/hxdiscord_rpc/Types.hx
+          printf 'package hxdiscord_rpc;\ntypedef DiscordPresence = Dynamic;\n' > source/hxdiscord_rpc/DiscordPresence.hx
+          printf 'package hxdiscord_rpc;\ntypedef DiscordRichPresence = Dynamic;\n' > source/hxdiscord_rpc/DiscordRichPresence.hx
+
+          # Replace engine Discord backend with complete no-op matching the engine API
+          printf 'package backend;\nclass DiscordClient {\n  public static var isInitialized:Bool = false;\n  public static function initialize() {}\n  public static function shutdown() {}\n  public static function prepare() {}\n  public static function check() {}\n  public static function resetClientID(?id:String) {}\n  public static function changePresence(details:String, ?state:String, ?smallImageKey:String, ?hasStartTimestamp:Bool, ?endTimestamp:Float) {}\n}\n' > source/backend/Discord.hx
+
+          # Misc HTML5 incompatibility fixes
+          find source -name "*.hx" -type f -exec sed -i \
+            -e '/import cpp/d' \
+            -e 's/cpp\.vm\.Gc\.memInfo64(cpp\.vm\.Gc\.MEM_INFO_USAGE)/0/g' \
+            -e 's/cpp\.[a-zA-Z0-9_]*/Dynamic/g' \
+            -e '/import llua/d' \
+            -e 's/llua\.[a-zA-Z0-9_]*/Dynamic/g' \
+            -e 's/getCPUThreadsCount()/1/g' \
+            -e 's/FlxG\.error(/trace(/g' \
+            -e 's/\bPath\.extension\b/haxe.io.Path.extension/g' \
+            -e 's/\bPath\.withoutDirectory\b/haxe.io.Path.withoutDirectory/g' \
+            -e 's/\bPath\.withoutExtension\b/haxe.io.Path.withoutExtension/g' \
+            -e 's/\bPath\.directory\b/haxe.io.Path.directory/g' \
+            {} +
+
           find . -name "FlxSoundTray.hx" -type f -exec sed -i 's/public function new(/public function showIncrement() { show(); } public function showDecrement() { show(); }\n\n&/g' {} +
 
       - name: Optimization & Web Compile Build
