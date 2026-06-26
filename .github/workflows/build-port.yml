@@ -83,6 +83,7 @@ jobs:
           echo 'class Process { public var stdout:Dynamic; public var stderr:Dynamic; public function new(c:String, ?a:Dynamic) { stdout = { readAll: function() return { toString: function() return "" }, readLine: function() return "" }; stderr = stdout; } public function exitCode(b:Bool=true) return 0; public function close() {} }' > source/Process.hx
           echo 'class Thread { public static function create(f:Void->Void) { f(); } public static function readMessage(b:Bool) return null; public static function sendMessage(m:Dynamic) {} }' > source/Thread.hx
           echo 'class Mutex { public function new() {} public function acquire() {} public function release() {} }' > source/Mutex.hx
+          echo 'class FixedThreadPool { public function new(size:Int) {} public function run(f:Void->Void) { f(); } public function shutdown() {} }' > source/FixedThreadPool.hx
           
           sed -i -e '/discord_rpc/d' -e '/discord-rpc/d' -e '/linc_luajit/d' Project.xml || true
           mkdir -p source/hxdiscord_rpc
@@ -90,7 +91,7 @@ jobs:
           echo 'package hxdiscord_rpc; class Types { public static inline var DISCORD_REPLY_NO=0; public static inline var DISCORD_REPLY_YES=1; public static inline var DISCORD_REPLY_IGNORE=2; }' > source/hxdiscord_rpc/Types.hx
           echo 'package hxdiscord_rpc; typedef DiscordPresence = Dynamic;' > source/hxdiscord_rpc/DiscordPresence.hx
 
-          find source -name "*.hx" -type f -exec sed -i -e 's/sys\.FileSystem/FileSystem/g'                                                           -e 's/sys\.io\.File/File/g'                                                           -e 's/sys\.io\.Process/Process/g'                                                           -e 's/sys\.thread\.Thread/Thread/g'                                                           -e 's/sys\.thread\.Mutex/Mutex/g'                                                           -e '/import cpp/d'                                                           -e 's/cpp\.[a-zA-Z0-9_]+/Dynamic/g'                                                           -e '/import llua/d'                                                           -e 's/llua\.[a-zA-Z0-9_]+/Dynamic/g' {} +
+          find source -name "*.hx" -type f -exec sed -i -e 's/sys\.FileSystem/FileSystem/g'                                                           -e 's/sys\.io\.File/File/g'                                                           -e 's/sys\.io\.Process/Process/g'                                                           -e 's/sys\.thread\.Thread/Thread/g'                                                           -e 's/sys\.thread\.Mutex/Mutex/g'                                                           -e 's/sys\.thread\.FixedThreadPool/FixedThreadPool/g'                                                           -e '/import cpp/d'                                                           -e 's/cpp\.[a-zA-Z0-9_]+/Dynamic/g'                                                           -e '/import llua/d'                                                           -e 's/llua\.[a-zA-Z0-9_]+/Dynamic/g' {} +
           find . -name "FlxSoundTray.hx" -type f -exec sed -i 's/public function new(/public function showIncrement() { show(); } public function showDecrement() { show(); }\n\n&/g' {} +
 
       - name: Optimization & Web Compile Build
