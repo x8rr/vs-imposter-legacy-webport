@@ -39,8 +39,16 @@ jobs:
       - name: Inject Mod
         run: |
           mkdir -p engine-source/mods
+          # Copy top-level mod folders into mods/ (PsychEngine mod structure)
           cp -rn mods_upload/* engine-source/mods/ || true
-          cp -rn mods_upload/* engine-source/assets/ || true
+          # Also merge each mod's asset subfolders into engine assets/ so they
+          # are baked into the HTML5 build (runtime fs is stubbed out)
+          for mod_dir in mods_upload/*/; do
+            [ -d "$mod_dir" ] || continue
+            for asset_sub in characters data images music sounds stages weeks videos; do
+              [ -d "${mod_dir}${asset_sub}" ] && cp -rn "${mod_dir}${asset_sub}" engine-source/assets/ || true
+            done
+          done
 
       - name: Disable Videos
         run: find . -name "*.mp4" -type f -exec mv {} {}.disabled \;
