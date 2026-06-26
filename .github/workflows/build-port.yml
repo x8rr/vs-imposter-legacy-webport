@@ -92,15 +92,7 @@ jobs:
           echo 'package hxdiscord_rpc; typedef DiscordPresence = Dynamic;' > source/hxdiscord_rpc/DiscordPresence.hx
           echo 'package hxdiscord_rpc; typedef DiscordRichPresence = Dynamic;' > source/hxdiscord_rpc/DiscordRichPresence.hx
           # Replace the engine's Discord backend with a no-op so hxdiscord_rpc types are never referenced
-          cat > source/backend/Discord.hx << 'HXEOF'
-package backend;
-class DiscordClient {
-  public static var isInitialized:Bool = false;
-  public static function initialize() {}
-  public static function shutdown() {}
-  public static function changePresence(details:String, ?state:String, ?smallImageKey:String, ?hasStartTimestamp:Bool, ?endTimestamp:Float) {}
-}
-HXEOF
+          printf 'package backend;\nclass DiscordClient {\n  public static var isInitialized:Bool = false;\n  public static function initialize() {}\n  public static function shutdown() {}\n  public static function changePresence(details:String, ?state:String, ?smallImageKey:String, ?hasStartTimestamp:Bool, ?endTimestamp:Float) {}\n}\n' > source/backend/Discord.hx
 
           find source -name "*.hx" -type f -exec sed -i -e 's/sys\.FileSystem/FileSystem/g'                                                           -e 's/sys\.io\.File/File/g'                                                           -e 's/sys\.io\.Process/Process/g'                                                           -e 's/sys\.thread\.Thread/Thread/g'                                                           -e 's/sys\.thread\.Mutex/Mutex/g'                                                           -e 's/sys\.thread\.FixedThreadPool/FixedThreadPool/g'                                                           -e '/import cpp/d'                                                           -e 's/cpp\.[a-zA-Z0-9_]+/Dynamic/g'                                                           -e '/import llua/d'                                                           -e 's/llua\.[a-zA-Z0-9_]+/Dynamic/g' {} +
           find . -name "FlxSoundTray.hx" -type f -exec sed -i 's/public function new(/public function showIncrement() { show(); } public function showDecrement() { show(); }\n\n&/g' {} +
