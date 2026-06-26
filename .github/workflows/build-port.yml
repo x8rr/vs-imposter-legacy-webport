@@ -127,6 +127,10 @@ jobs:
           # an explicit import (explicit beats wildcard) to every file that uses new Option().
           grep -rl "new Option(" source --include="*.hx" | grep -v "source/options/Option.hx" | xargs -r sed -i '/^package /a import options.Option;'
 
+          # Path typedef: lets bare 'Path' resolve to haxe.io.Path without sed replacement.
+          # Sed replacement caused double-substitution on lines already using haxe.io.Path.*.
+          printf 'typedef Path = haxe.io.Path;\n' > source/Path.hx
+
           find source -name "*.hx" -type f -exec sed -i \
             -e '/import sys\./d' \
             -e 's/sys\.FileSystem/HxFileSystem/g' \
@@ -135,6 +139,8 @@ jobs:
             -e 's/sys\.thread\.Thread/HxThread/g' \
             -e 's/sys\.thread\.Mutex/HxMutex/g' \
             -e 's/sys\.thread\.FixedThreadPool/HxFixedThreadPool/g' \
+            -e 's/\bFile\./HxFile./g' \
+            -e 's/\bFileSystem\./HxFileSystem./g' \
             -e '/import cpp/d' \
             -e 's/cpp\.vm\.Gc\.memInfo64(cpp\.vm\.Gc\.MEM_INFO_USAGE)/0/g' \
             -e 's/cpp\.[a-zA-Z0-9_]*/Dynamic/g' \
@@ -142,10 +148,6 @@ jobs:
             -e 's/llua\.[a-zA-Z0-9_]*/Dynamic/g' \
             -e 's/getCPUThreadsCount()/1/g' \
             -e 's/FlxG\.error(/trace(/g' \
-            -e 's/\bPath\.extension\b/haxe.io.Path.extension/g' \
-            -e 's/\bPath\.withoutDirectory\b/haxe.io.Path.withoutDirectory/g' \
-            -e 's/\bPath\.withoutExtension\b/haxe.io.Path.withoutExtension/g' \
-            -e 's/\bPath\.directory\b/haxe.io.Path.directory/g' \
             {} +
 
           find . -name "FlxSoundTray.hx" -type f -exec sed -i 's/public function new(/public function showIncrement() { show(); } public function showDecrement() { show(); }\n\n&/g' {} +
