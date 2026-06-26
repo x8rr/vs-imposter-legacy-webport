@@ -38,25 +38,32 @@ jobs:
 
       - name: Inject Mod
         run: |
-          echo "=== mods_upload contents ===" && find mods_upload -maxdepth 2 | head -40
-          # MODS_ALLOWED is desktop-only in PsychEngine. For HTML5 we copy mod
-          # assets directly into the engine's assets/ tree so native OpenFL
-          # asset loading finds everything without any filesystem stub.
-          for mod_dir in mods_upload/*/; do
+          echo "=== mods_upload top-level ===" && ls mods_upload/
+          # Detect flat (mod files at root) vs nested (mod files inside a subfolder)
+          if [ -d "mods_upload/characters" ] || [ -d "mods_upload/data" ] || [ -d "mods_upload/images" ] || [ -d "mods_upload/weeks" ] || [ -d "mods_upload/songs" ]; then
+            echo "Flat mod structure detected"
+            mod_roots=("mods_upload")
+          else
+            echo "Nested mod structure detected"
+            mod_roots=(mods_upload/*/)
+          fi
+          for mod_dir in "${mod_roots[@]}"; do
             [ -d "$mod_dir" ] || continue
+            echo "Injecting from: $mod_dir"
             for sub in characters data images music sounds weeks stages events; do
-              if [ -d "${mod_dir}${sub}" ]; then
+              if [ -d "${mod_dir}/${sub}" ]; then
+                echo "  Copying ${sub}/"
                 mkdir -p "engine-source/assets/shared/${sub}"
-                cp -rn "${mod_dir}${sub}/." "engine-source/assets/shared/${sub}/"
+                cp -rn "${mod_dir}/${sub}/." "engine-source/assets/shared/${sub}/"
               fi
             done
-            if [ -d "${mod_dir}songs" ]; then
+            if [ -d "${mod_dir}/songs" ]; then
+              echo "  Copying songs/"
               mkdir -p engine-source/assets/songs
-              cp -rn "${mod_dir}songs/." engine-source/assets/songs/
+              cp -rn "${mod_dir}/songs/." engine-source/assets/songs/
             fi
           done
           echo "=== weeks after inject ===" && ls engine-source/assets/shared/weeks/ 2>/dev/null || echo "NO WEEKS FOUND"
-          echo "=== data after inject ===" && ls engine-source/assets/shared/data/ 2>/dev/null | head -20 || echo "NO DATA FOUND"
 
       - name: Disable Videos
         run: find . -name "*.mp4" -type f -exec mv {} {}.disabled \;
