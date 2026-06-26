@@ -38,16 +38,24 @@ jobs:
 
       - name: Inject Mod
         run: |
-          echo "=== mods_upload tree (depth 4) ===" && find mods_upload -maxdepth 4 -type d | head -60
-          # Find every directory that directly contains a known mod asset folder.
-          # This handles any nesting depth (flat zip, one-level subfolder, or
-          # full binary distribution with mods buried inside bin/mods/ModName/).
+          echo "=== mods_upload tree (depth 6) ===" && find mods_upload -maxdepth 6 -type d | head -80
+          # Use weekList.txt as the definitive mod root indicator.
+          # weekList.txt lives at mod_root/weeks/weekList.txt, so its grandparent is mod_root.
+          # Fall back to weeks/ directory if no weekList.txt found.
           mapfile -t mod_roots < <(
-            find mods_upload -type d \( \
-              -name "characters" -o -name "data" -o -name "weeks" \
-              -o -name "images"  -o -name "songs" -o -name "music" \
-            \) -printf '%h\n' | sort -u
+            find mods_upload -name "weekList.txt" -printf '%h\n' \
+              | sed 's|/weeks$||' \
+              | sort -u
           )
+          if [ ${#mod_roots[@]} -eq 0 ]; then
+            echo "No weekList.txt found, falling back to weeks/ directory search..."
+            mapfile -t mod_roots < <(
+              find mods_upload -type d -name "weeks" \
+                | grep -v '/images/' \
+                | sed 's|/weeks$||' \
+                | sort -u
+            )
+          fi
           if [ ${#mod_roots[@]} -eq 0 ]; then
             echo "ERROR: no mod asset folders found anywhere in zip" && exit 1
           fi
