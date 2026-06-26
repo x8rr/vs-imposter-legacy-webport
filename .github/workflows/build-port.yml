@@ -117,6 +117,11 @@ jobs:
           # 1. Remove all import sys.* lines (blocked by HTML5 target)
           # 2. Replace sys.* usages with Hx-prefixed stub names
           # 3. Fix other misc HTML5 incompatibilities
+          # import.hx has 'import js.html.*' for JS target, which makes bare 'Option'
+          # resolve to js.html.OptionElement instead of options.Option. Fix by adding
+          # an explicit import (explicit beats wildcard) to every file that uses new Option().
+          grep -rl "new Option(" source --include="*.hx" | grep -v "source/options/Option.hx" | xargs -r sed -i '/^package /a import options.Option;'
+
           find source -name "*.hx" -type f -exec sed -i \
             -e '/import sys\./d' \
             -e 's/sys\.FileSystem/HxFileSystem/g' \
