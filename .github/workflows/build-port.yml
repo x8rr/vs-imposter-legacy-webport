@@ -55,8 +55,10 @@ jobs:
         run: |
           haxelib setup ~/haxelib
           haxelib install hmm --quiet
-          cd engine-source
-          haxelib run hmm install --quiet
+
+      - name: Install Engine Dependencies
+        working-directory: engine-source
+        run: haxelib run hmm install --quiet
 
       # ── 4. HTML5 compatibility patches ──────────────────────────────────────
       #
