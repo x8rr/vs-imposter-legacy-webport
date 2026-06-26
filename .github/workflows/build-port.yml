@@ -38,17 +38,20 @@ jobs:
 
       - name: Inject Mod
         run: |
-          echo "=== mods_upload top-level ===" && ls mods_upload/
-          # Detect flat (mod files at root) vs nested (mod files inside a subfolder)
-          if [ -d "mods_upload/characters" ] || [ -d "mods_upload/data" ] || [ -d "mods_upload/images" ] || [ -d "mods_upload/weeks" ] || [ -d "mods_upload/songs" ]; then
-            echo "Flat mod structure detected"
-            mod_roots=("mods_upload")
-          else
-            echo "Nested mod structure detected"
-            mod_roots=(mods_upload/*/)
+          echo "=== mods_upload tree (depth 4) ===" && find mods_upload -maxdepth 4 -type d | head -60
+          # Find every directory that directly contains a known mod asset folder.
+          # This handles any nesting depth (flat zip, one-level subfolder, or
+          # full binary distribution with mods buried inside bin/mods/ModName/).
+          mapfile -t mod_roots < <(
+            find mods_upload -type d \( \
+              -name "characters" -o -name "data" -o -name "weeks" \
+              -o -name "images"  -o -name "songs" -o -name "music" \
+            \) -printf '%h\n' | sort -u
+          )
+          if [ ${#mod_roots[@]} -eq 0 ]; then
+            echo "ERROR: no mod asset folders found anywhere in zip" && exit 1
           fi
           for mod_dir in "${mod_roots[@]}"; do
-            [ -d "$mod_dir" ] || continue
             echo "Injecting from: $mod_dir"
             for sub in characters data images music sounds weeks stages events; do
               if [ -d "${mod_dir}/${sub}" ]; then
