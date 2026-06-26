@@ -112,47 +112,8 @@ jobs:
           # ── A: sys.* stubs ──────────────────────────────────────────────────
           # HxFileSystem and HxFile delegate to openfl.utils.Assets so baked-in
           # mod assets (mods/ embedded via Project.xml) are discoverable at runtime
-          cat > source/HxFileSystem.hx << 'HXEOF'
-class HxFileSystem {
-  public static function absolutePath(p:String) return p;
-  public static function fullPath(p:String) return p;
-  public static function exists(p:String):Bool {
-    return openfl.utils.Assets.exists(p);
-  }
-  public static function readDirectory(p:String):Array<String> {
-    var norm = p.split('\\').join('/');
-    if (!StringTools.endsWith(norm, '/')) norm += '/';
-    var seen = new haxe.ds.StringMap<Bool>();
-    var result:Array<String> = [];
-    for (a in openfl.utils.Assets.list()) {
-      if (StringTools.startsWith(a, norm)) {
-        var rest = a.substr(norm.length);
-        var part = rest.split('/')[0];
-        if (part != '' && !seen.exists(part)) { seen.set(part, true); result.push(part); }
-      }
-    }
-    return result;
-  }
-  public static function isDirectory(p:String) return false;
-  public static function stat(p:String) return null;
-  public static function createDirectory(p:String) {}
-  public static function deleteFile(p:String) {}
-  public static function deleteDirectory(p:String) {}
-}
-HXEOF
-          cat > source/HxFile.hx << 'HXEOF'
-class HxFile {
-  public static function getContent(p:String):String {
-    try { var t = openfl.utils.Assets.getText(p); return t != null ? t : ''; } catch(e:Dynamic) { return ''; }
-  }
-  public static function getBytes(p:String):haxe.io.Bytes {
-    try { return openfl.utils.Assets.getBytes(p); } catch(e:Dynamic) { return null; }
-  }
-  public static function saveContent(p:String, c:String) {}
-  public static function saveBytes(p:String, b:Dynamic) {}
-  public static function copy(s:String, d:String) {}
-}
-HXEOF
+          printf 'class HxFileSystem {\n  public static function absolutePath(p:String) return p;\n  public static function fullPath(p:String) return p;\n  public static function exists(p:String):Bool { return openfl.utils.Assets.exists(p); }\n  public static function readDirectory(p:String):Array<String> {\n    var norm = p.split("\\\\").join("/");\n    if (!StringTools.endsWith(norm, "/")) norm += "/";\n    var seen = new haxe.ds.StringMap<Bool>();\n    var result:Array<String> = [];\n    for (a in openfl.utils.Assets.list()) {\n      if (StringTools.startsWith(a, norm)) {\n        var rest = a.substr(norm.length);\n        var part = rest.split("/")[0];\n        if (part != "" && !seen.exists(part)) { seen.set(part, true); result.push(part); }\n      }\n    }\n    return result;\n  }\n  public static function isDirectory(p:String) return false;\n  public static function stat(p:String) return null;\n  public static function createDirectory(p:String) {}\n  public static function deleteFile(p:String) {}\n  public static function deleteDirectory(p:String) {}\n}\n' > source/HxFileSystem.hx
+          printf 'class HxFile {\n  public static function getContent(p:String):String {\n    try { var t = openfl.utils.Assets.getText(p); return t != null ? t : ""; } catch(e:Dynamic) { return ""; }\n  }\n  public static function getBytes(p:String):haxe.io.Bytes {\n    try { return openfl.utils.Assets.getBytes(p); } catch(e:Dynamic) { return null; }\n  }\n  public static function saveContent(p:String, c:String) {}\n  public static function saveBytes(p:String, b:Dynamic) {}\n  public static function copy(s:String, d:String) {}\n}\n' > source/HxFile.hx
           printf 'class HxProcess {\n  public var stdout:Dynamic;\n  public var stderr:Dynamic;\n  public function new(c:String, ?a:Dynamic) { stdout = { readAll: function() return { toString:function() return "", readLine:function() return "" } }; stderr = stdout; }\n  public function exitCode(b:Bool=true) return 0;\n  public function close() {}\n}\n' > source/HxProcess.hx
           printf 'class HxThread { public static function create(f:Void->Void) { f(); } public static function readMessage(b:Bool) return null; public static function sendMessage(m:Dynamic) {} }\n' > source/HxThread.hx
           printf 'class Thread { public static function create(f:Void->Void) { f(); } public static function readMessage(b:Bool) return null; public static function sendMessage(m:Dynamic) {} }\n' > source/Thread.hx
