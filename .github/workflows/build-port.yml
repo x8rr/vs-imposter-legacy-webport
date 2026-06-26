@@ -38,9 +38,22 @@ jobs:
 
       - name: Inject Mod
         run: |
-          mkdir -p engine-source/example_mods
-          # PsychEngine's Project.xml embeds example_mods/ as mods/ — copy there
-          cp -rn mods_upload/* engine-source/example_mods/ || true
+          # MODS_ALLOWED is desktop-only in PsychEngine. For HTML5 we copy mod
+          # assets directly into the engine's assets/ tree so native OpenFL
+          # asset loading finds everything without any filesystem stub.
+          for mod_dir in mods_upload/*/; do
+            [ -d "$mod_dir" ] || continue
+            for sub in characters data images music sounds weeks stages events; do
+              if [ -d "${mod_dir}${sub}" ]; then
+                mkdir -p "engine-source/assets/shared/${sub}"
+                cp -rn "${mod_dir}${sub}/." "engine-source/assets/shared/${sub}/"
+              fi
+            done
+            if [ -d "${mod_dir}songs" ]; then
+              mkdir -p engine-source/assets/songs
+              cp -rn "${mod_dir}songs/." engine-source/assets/songs/
+            fi
+          done
 
       - name: Disable Videos
         run: find . -name "*.mp4" -type f -exec mv {} {}.disabled \;
@@ -121,9 +134,7 @@ jobs:
             | grep -v "source/options/Option.hx" \
             | xargs -r sed -i '/^package /a import options.Option;'
 
-          # ── C: discord / lua / cpp stubs + embed mods/ as assets ───────────
-          # Force mods to be embedded for HTML5 (default is embed='false')
-          sed -i "s|<assets path='example_mods' rename='mods' embed='false'/>|<assets path='example_mods' rename='mods' embed='true'/>|" Project.xml || true
+          # ── C: discord / lua / cpp stubs ────────────────────────────────────
           sed -i -e '/discord_rpc/d' -e '/discord-rpc/d' -e '/linc_luajit/d' -e '/DISCORD_ALLOWED/d' Project.xml || true
           mkdir -p source/hxdiscord_rpc
           printf 'package hxdiscord_rpc;\nclass Discord { public static function Initialize(a:String,b:Bool,c:Dynamic){} public static function Shutdown(){} public static function RunCallbacks(){} public static function UpdatePresence(a:Dynamic){} public static function ClearPresence(){} }\n' > source/hxdiscord_rpc/Discord.hx
