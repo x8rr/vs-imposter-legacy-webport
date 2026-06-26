@@ -38,17 +38,9 @@ jobs:
 
       - name: Inject Mod
         run: |
-          mkdir -p engine-source/mods
-          # Copy top-level mod folders into mods/ (PsychEngine mod structure)
-          cp -rn mods_upload/* engine-source/mods/ || true
-          # Also merge each mod's asset subfolders into engine assets/ so they
-          # are baked into the HTML5 build (runtime fs is stubbed out)
-          for mod_dir in mods_upload/*/; do
-            [ -d "$mod_dir" ] || continue
-            for asset_sub in characters data images music sounds stages weeks videos; do
-              [ -d "${mod_dir}${asset_sub}" ] && cp -rn "${mod_dir}${asset_sub}" engine-source/assets/ || true
-            done
-          done
+          mkdir -p engine-source/example_mods
+          # PsychEngine's Project.xml embeds example_mods/ as mods/ — copy there
+          cp -rn mods_upload/* engine-source/example_mods/ || true
 
       - name: Disable Videos
         run: find . -name "*.mp4" -type f -exec mv {} {}.disabled \;
@@ -130,8 +122,8 @@ jobs:
             | xargs -r sed -i '/^package /a import options.Option;'
 
           # ── C: discord / lua / cpp stubs + embed mods/ as assets ───────────
-          # Embed the mods/ folder so openfl.utils.Assets can find mod content
-          sed -i 's|<assets path="assets"|<assets path="mods" rename="mods" />\n\t\t<assets path="assets"|' Project.xml || true
+          # Force mods to be embedded for HTML5 (default is embed='false')
+          sed -i "s|<assets path='example_mods' rename='mods' embed='false'/>|<assets path='example_mods' rename='mods' embed='true'/>|" Project.xml || true
           sed -i -e '/discord_rpc/d' -e '/discord-rpc/d' -e '/linc_luajit/d' -e '/DISCORD_ALLOWED/d' Project.xml || true
           mkdir -p source/hxdiscord_rpc
           printf 'package hxdiscord_rpc;\nclass Discord { public static function Initialize(a:String,b:Bool,c:Dynamic){} public static function Shutdown(){} public static function RunCallbacks(){} public static function UpdatePresence(a:Dynamic){} public static function ClearPresence(){} }\n' > source/hxdiscord_rpc/Discord.hx
