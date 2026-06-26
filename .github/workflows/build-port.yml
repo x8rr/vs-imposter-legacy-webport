@@ -184,6 +184,13 @@ jobs:
             -e 's/FlxG\.error(/trace(/g' \
             {} +
 
+          # weekBefore may be absent in older mod week JSONs — null-guard it
+          find source -name "StoryMenuState.hx" -exec perl -i \
+            -pe 's/leWeek\.weekBefore\.length/leWeek.weekBefore != null \&\& leWeek.weekBefore.length/g' {} +
+          # Also null-guard leWeek itself in case a weeksList entry has no matching JSON
+          find source -name "StoryMenuState.hx" -exec perl -i \
+            -pe 's/function weekIsLocked\(name:String\):Bool \{/function weekIsLocked(name:String):Bool { var _lw = WeekData.weeksLoaded.get(name); if (_lw == null) return false;/g' {} +
+
           # FlxSoundTray needs stub methods added before its constructor
           find . -name "FlxSoundTray.hx" -type f -exec sed -i \
             's/public function new(/public function showIncrement() { show(); } public function showDecrement() { show(); }\n\n&/g' {} +
