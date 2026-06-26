@@ -90,10 +90,13 @@ jobs:
           printf 'class HxProcess {\n  public var stdout:Dynamic;\n  public var stderr:Dynamic;\n  public function new(c:String, ?a:Dynamic) { stdout = { readAll: function() return { toString: function() return "" }, readLine: function() return "" }; stderr = stdout; }\n  public function exitCode(b:Bool=true) return 0;\n  public function close() {}\n}\n' > source/HxProcess.hx
 
           printf 'class HxThread {\n  public static function create(f:Void->Void) { f(); }\n  public static function readMessage(b:Bool) return null;\n  public static function sendMessage(m:Dynamic) {}\n}\n' > source/HxThread.hx
+          printf 'class Thread {\n  public static function create(f:Void->Void) { f(); }\n  public static function readMessage(b:Bool) return null;\n  public static function sendMessage(m:Dynamic) {}\n}\n' > source/Thread.hx
 
           printf 'class HxMutex {\n  public function new() {}\n  public function acquire() {}\n  public function release() {}\n}\n' > source/HxMutex.hx
+          printf 'class Mutex {\n  public function new() {}\n  public function acquire() {}\n  public function release() {}\n}\n' > source/Mutex.hx
 
           printf 'class HxFixedThreadPool {\n  public function new(size:Int) {}\n  public function run(f:Void->Void) { f(); }\n  public function shutdown() {}\n}\n' > source/HxFixedThreadPool.hx
+          printf 'class FixedThreadPool {\n  public function new(size:Int) {}\n  public function run(f:Void->Void) { f(); }\n  public function shutdown() {}\n}\n' > source/FixedThreadPool.hx
 
           printf 'class Sys {\n  public static function exit(code:Int) {}\n  public static function sleep(t:Float) {}\n  public static function command(c:String, ?a:Array<String>) return 0;\n  public static function args():Array<String> return [];\n  public static function getCwd() return "";\n  public static function setCwd(s:String) {}\n  public static function print(v:Dynamic) {}\n  public static function println(v:Dynamic) {}\n  public static function environment() return new haxe.ds.StringMap<String>();\n  public static function getEnv(s:String) return "";\n  public static function programPath() return "";\n}\n' > source/Sys.hx
 
