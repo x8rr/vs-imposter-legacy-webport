@@ -78,22 +78,22 @@ jobs:
         run: |
           cd engine-source
 
-          # Shadow unavailable sys.* stdlib classes with no-op stubs.
-          # Putting them at source/sys/... means the compiler finds them via classpath
-          # before the native (HTML5-unavailable) versions, with no name conflicts.
-          mkdir -p source/sys/io source/sys/thread
+          # Haxe HTML5 target blocks the entire sys.* package at the compiler level —
+          # even a source-path override can't help because the import line itself fails.
+          # Strategy: delete all import sys.* lines, rename usages to prefixed stub
+          # classes (HxFile, HxFileSystem, …) that have no conflict with browser builtins.
 
-          printf 'package sys;\nclass FileSystem {\n  public static function absolutePath(p:String) return p;\n  public static function exists(p:String) return false;\n  public static function readDirectory(p:String):Array<String> return [];\n  public static function isDirectory(p:String) return false;\n  public static function stat(p:String) return null;\n  public static function fullPath(p:String) return p;\n  public static function createDirectory(p:String) {}\n  public static function deleteFile(p:String) {}\n  public static function deleteDirectory(p:String) {}\n}\n' > source/sys/FileSystem.hx
+          printf 'class HxFileSystem {\n  public static function absolutePath(p:String) return p;\n  public static function exists(p:String) return false;\n  public static function readDirectory(p:String):Array<String> return [];\n  public static function isDirectory(p:String) return false;\n  public static function stat(p:String) return null;\n  public static function fullPath(p:String) return p;\n  public static function createDirectory(p:String) {}\n  public static function deleteFile(p:String) {}\n  public static function deleteDirectory(p:String) {}\n}\n' > source/HxFileSystem.hx
 
-          printf 'package sys.io;\nclass File {\n  public static function getContent(p:String) return "";\n  public static function getBytes(p:String) return null;\n  public static function saveContent(p:String, c:String) {}\n  public static function saveBytes(p:String, b:Dynamic) {}\n  public static function copy(s:String, d:String) {}\n}\n' > source/sys/io/File.hx
+          printf 'class HxFile {\n  public static function getContent(p:String) return "";\n  public static function getBytes(p:String) return null;\n  public static function saveContent(p:String, c:String) {}\n  public static function saveBytes(p:String, b:Dynamic) {}\n  public static function copy(s:String, d:String) {}\n}\n' > source/HxFile.hx
 
-          printf 'package sys.io;\nclass Process {\n  public var stdout:Dynamic;\n  public var stderr:Dynamic;\n  public function new(c:String, ?a:Dynamic) { stdout = { readAll: function() return { toString: function() return "" }, readLine: function() return "" }; stderr = stdout; }\n  public function exitCode(b:Bool=true) return 0;\n  public function close() {}\n}\n' > source/sys/io/Process.hx
+          printf 'class HxProcess {\n  public var stdout:Dynamic;\n  public var stderr:Dynamic;\n  public function new(c:String, ?a:Dynamic) { stdout = { readAll: function() return { toString: function() return "" }, readLine: function() return "" }; stderr = stdout; }\n  public function exitCode(b:Bool=true) return 0;\n  public function close() {}\n}\n' > source/HxProcess.hx
 
-          printf 'package sys.thread;\nclass Thread {\n  public static function create(f:Void->Void) { f(); }\n  public static function readMessage(b:Bool) return null;\n  public static function sendMessage(m:Dynamic) {}\n}\n' > source/sys/thread/Thread.hx
+          printf 'class HxThread {\n  public static function create(f:Void->Void) { f(); }\n  public static function readMessage(b:Bool) return null;\n  public static function sendMessage(m:Dynamic) {}\n}\n' > source/HxThread.hx
 
-          printf 'package sys.thread;\nclass Mutex {\n  public function new() {}\n  public function acquire() {}\n  public function release() {}\n}\n' > source/sys/thread/Mutex.hx
+          printf 'class HxMutex {\n  public function new() {}\n  public function acquire() {}\n  public function release() {}\n}\n' > source/HxMutex.hx
 
-          printf 'package sys.thread;\nclass FixedThreadPool {\n  public function new(size:Int) {}\n  public function run(f:Void->Void) { f(); }\n  public function shutdown() {}\n}\n' > source/sys/thread/FixedThreadPool.hx
+          printf 'class HxFixedThreadPool {\n  public function new(size:Int) {}\n  public function run(f:Void->Void) { f(); }\n  public function shutdown() {}\n}\n' > source/HxFixedThreadPool.hx
 
           printf 'class Sys {\n  public static function exit(code:Int) {}\n  public static function sleep(t:Float) {}\n  public static function command(c:String, ?a:Array<String>) return 0;\n  public static function args():Array<String> return [];\n  public static function getCwd() return "";\n  public static function setCwd(s:String) {}\n  public static function print(v:Dynamic) {}\n  public static function println(v:Dynamic) {}\n  public static function environment() return new haxe.ds.StringMap<String>();\n  public static function getEnv(s:String) return "";\n  public static function programPath() return "";\n}\n' > source/Sys.hx
 
@@ -110,8 +110,18 @@ jobs:
           # Replace engine Discord backend with complete no-op matching the engine API
           printf 'package backend;\nclass DiscordClient {\n  public static var isInitialized:Bool = false;\n  public static function initialize() {}\n  public static function shutdown() {}\n  public static function prepare() {}\n  public static function check() {}\n  public static function resetClientID(?id:String) {}\n  public static function changePresence(details:String, ?state:String, ?smallImageKey:String, ?hasStartTimestamp:Bool, ?endTimestamp:Float) {}\n}\n' > source/backend/Discord.hx
 
-          # Misc HTML5 incompatibility fixes
+          # Patch all source files:
+          # 1. Remove all import sys.* lines (blocked by HTML5 target)
+          # 2. Replace sys.* usages with Hx-prefixed stub names
+          # 3. Fix other misc HTML5 incompatibilities
           find source -name "*.hx" -type f -exec sed -i \
+            -e '/import sys\./d' \
+            -e 's/sys\.FileSystem/HxFileSystem/g' \
+            -e 's/sys\.io\.File/HxFile/g' \
+            -e 's/sys\.io\.Process/HxProcess/g' \
+            -e 's/sys\.thread\.Thread/HxThread/g' \
+            -e 's/sys\.thread\.Mutex/HxMutex/g' \
+            -e 's/sys\.thread\.FixedThreadPool/HxFixedThreadPool/g' \
             -e '/import cpp/d' \
             -e 's/cpp\.vm\.Gc\.memInfo64(cpp\.vm\.Gc\.MEM_INFO_USAGE)/0/g' \
             -e 's/cpp\.[a-zA-Z0-9_]*/Dynamic/g' \
