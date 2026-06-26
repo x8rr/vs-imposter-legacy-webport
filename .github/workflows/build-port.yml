@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mod_url:
-        description: 'Direct URL to your mod .zip file (Google Drive, Dropbox, MediaFire, Discord, etc.)'
+        description: 'Direct URL to your mod .zip file (Google Drive, Dropbox, MediaFire, etc.)'
         required: true
         type: string
 
@@ -13,55 +13,50 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
-      - name: Checkout Base Engine
+      # ── 1. Engine source ────────────────────────────────────────────────────
+      - name: Checkout Engine
         uses: actions/checkout@v4
         with:
           repository: 'ShadowMario/FNF-PsychEngine'
           path: 'engine-source'
 
-      - name: Download Mod Payload
+      # ── 2. Mod download & injection ─────────────────────────────────────────
+      - name: Download Mod
         run: |
-          echo "Downloading mod from URL provided..."
           pip install gdown --quiet
-          
           URL="${{ github.event.inputs.mod_url }}"
-          
           if [[ "$URL" == *"drive.google.com"* ]]; then
             gdown "$URL" -O mod-payload.zip
           else
             wget -q -O mod-payload.zip "$URL"
           fi
-          
-          echo "Extracting Mod Payload..."
           mkdir -p mods_upload
           unzip -q mod-payload.zip -d mods_upload/
           rm mod-payload.zip
 
-      - name: Inject Mods into Engine
+      - name: Inject Mod
         run: |
-          cd engine-source
-          mkdir -p mods
-          # Inject the uploaded mod files into the target directories
-          cp -rn ../mods_upload/* mods/ || true
-          cp -rn ../mods_upload/* assets/ || true
+          mkdir -p engine-source/mods
+          cp -rn mods_upload/* engine-source/mods/ || true
+          cp -rn mods_upload/* engine-source/assets/ || true
 
-      - name: Disable/Convert Videos (Web compatibility)
-        run: |
-          echo "Processing MP4 files to prevent web build crashes..."
-          find . -name "*.mp4" -type f -exec mv {} {}.disabled \;
+      - name: Disable Videos
+        run: find . -name "*.mp4" -type f -exec mv {} {}.disabled \;
 
-      - name: Setup Node.js
+      # ── 3. Toolchain ────────────────────────────────────────────────────────
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Setup Haxe
+      - name: Setup Haxe 4.3.6
         uses: krdlab/setup-haxe@master
         with:
           haxe-version: 4.3.6
 
-      - name: Install Haxelibs and Dependencies
+      - name: Install Haxelibs
         run: |
           cd engine-source
           haxelib setup ~/haxelib
@@ -79,58 +74,71 @@ jobs:
           haxelib git funkin.vis https://github.com/FunkinCrew/funkVis 22b1ce089dd924f15cdc4632397ef3504d464e90
           haxelib git grig.audio https://gitlab.com/haxe-grig/grig.audio.git cbf91e2180fd2e374924fe74844086aab7891666
 
-      - name: Patch HTML5 incompatible code (Mock Sys)
+      # ── 4. HTML5 compatibility patches ──────────────────────────────────────
+      #
+      # PsychEngine targets desktop (cpp) by default. Compiling for HTML5/JS
+      # requires three categories of fixes:
+      #
+      #  A) sys.* package — Haxe HTML5 target blocks it at the compiler level,
+      #     so we can't import or shadow it. We delete all import sys.* lines
+      #     and replace usages with Hx-prefixed stub classes that have no
+      #     conflict with browser built-ins (js.html.File, js.html.FileSystem).
+      #     Thread/Mutex/FixedThreadPool also get bare-name stubs because the
+      #     engine uses those names directly after the import is removed.
+      #
+      #  B) js.html.* wildcard — import.hx pulls in 'import js.html.*' for JS
+      #     builds, which makes bare names like File, FileSystem, and Option
+      #     resolve to browser types instead of engine types. We fix each:
+      #       • File / FileSystem  → replaced by sed with HxFile / HxFileSystem
+      #       • options.Option     → explicit import injected (beats wildcard)
+      #       • haxe.io.Path       → typedef stub; avoids double-substitution
+      #
+      #  C) cpp / lua / discord — native-only libraries stripped from Project.xml
+      #     and replaced with no-op stubs so the codebase compiles cleanly.
+      #
+      - name: Patch for HTML5
         run: |
           cd engine-source
 
-          # Haxe HTML5 target blocks the entire sys.* package at the compiler level —
-          # even a source-path override can't help because the import line itself fails.
-          # Strategy: delete all import sys.* lines, rename usages to prefixed stub
-          # classes (HxFile, HxFileSystem, …) that have no conflict with browser builtins.
-
+          # ── A: sys.* stubs ──────────────────────────────────────────────────
           printf 'class HxFileSystem {\n  public static function absolutePath(p:String) return p;\n  public static function exists(p:String) return false;\n  public static function readDirectory(p:String):Array<String> return [];\n  public static function isDirectory(p:String) return false;\n  public static function stat(p:String) return null;\n  public static function fullPath(p:String) return p;\n  public static function createDirectory(p:String) {}\n  public static function deleteFile(p:String) {}\n  public static function deleteDirectory(p:String) {}\n}\n' > source/HxFileSystem.hx
 
           printf 'class HxFile {\n  public static function getContent(p:String) return "";\n  public static function getBytes(p:String) return null;\n  public static function saveContent(p:String, c:String) {}\n  public static function saveBytes(p:String, b:Dynamic) {}\n  public static function copy(s:String, d:String) {}\n}\n' > source/HxFile.hx
 
-          printf 'class HxProcess {\n  public var stdout:Dynamic;\n  public var stderr:Dynamic;\n  public function new(c:String, ?a:Dynamic) { stdout = { readAll: function() return { toString: function() return "" }, readLine: function() return "" }; stderr = stdout; }\n  public function exitCode(b:Bool=true) return 0;\n  public function close() {}\n}\n' > source/HxProcess.hx
+          printf 'class HxProcess {\n  public var stdout:Dynamic;\n  public var stderr:Dynamic;\n  public function new(c:String, ?a:Dynamic) { stdout = { readAll: function() return { toString:function() return "", readLine:function() return "" } }; stderr = stdout; }\n  public function exitCode(b:Bool=true) return 0;\n  public function close() {}\n}\n' > source/HxProcess.hx
 
-          printf 'class HxThread {\n  public static function create(f:Void->Void) { f(); }\n  public static function readMessage(b:Bool) return null;\n  public static function sendMessage(m:Dynamic) {}\n}\n' > source/HxThread.hx
-          printf 'class Thread {\n  public static function create(f:Void->Void) { f(); }\n  public static function readMessage(b:Bool) return null;\n  public static function sendMessage(m:Dynamic) {}\n}\n' > source/Thread.hx
-
-          printf 'class HxMutex {\n  public function new() {}\n  public function acquire() {}\n  public function release() {}\n}\n' > source/HxMutex.hx
-          printf 'class Mutex {\n  public function new() {}\n  public function acquire() {}\n  public function release() {}\n}\n' > source/Mutex.hx
-
-          printf 'class HxFixedThreadPool {\n  public function new(size:Int) {}\n  public function run(f:Void->Void) { f(); }\n  public function shutdown() {}\n}\n' > source/HxFixedThreadPool.hx
-          printf 'class FixedThreadPool {\n  public function new(size:Int) {}\n  public function run(f:Void->Void) { f(); }\n  public function shutdown() {}\n}\n' > source/FixedThreadPool.hx
+          # Hx-prefixed (for sys.thread.X usages) + bare-name (for post-import-delete usages)
+          printf 'class HxThread { public static function create(f:Void->Void) { f(); } public static function readMessage(b:Bool) return null; public static function sendMessage(m:Dynamic) {} }\n' > source/HxThread.hx
+          printf 'class Thread { public static function create(f:Void->Void) { f(); } public static function readMessage(b:Bool) return null; public static function sendMessage(m:Dynamic) {} }\n' > source/Thread.hx
+          printf 'class HxMutex { public function new() {} public function acquire() {} public function release() {} }\n' > source/HxMutex.hx
+          printf 'class Mutex { public function new() {} public function acquire() {} public function release() {} }\n' > source/Mutex.hx
+          printf 'class HxFixedThreadPool { public function new(size:Int) {} public function run(f:Void->Void) { f(); } public function shutdown() {} }\n' > source/HxFixedThreadPool.hx
+          printf 'class FixedThreadPool { public function new(size:Int) {} public function run(f:Void->Void) { f(); } public function shutdown() {} }\n' > source/FixedThreadPool.hx
 
           printf 'class Sys {\n  public static function exit(code:Int) {}\n  public static function sleep(t:Float) {}\n  public static function command(c:String, ?a:Array<String>) return 0;\n  public static function args():Array<String> return [];\n  public static function getCwd() return "";\n  public static function setCwd(s:String) {}\n  public static function print(v:Dynamic) {}\n  public static function println(v:Dynamic) {}\n  public static function environment() return new haxe.ds.StringMap<String>();\n  public static function getEnv(s:String) return "";\n  public static function programPath() return "";\n}\n' > source/Sys.hx
 
-          # Disable discord, lua, and DISCORD_ALLOWED define in project config
+          # ── B: js.html.* conflict fixes ─────────────────────────────────────
+
+          # Path — typedef avoids double-substitution on lines already using haxe.io.Path.*
+          printf 'typedef Path = haxe.io.Path;\n' > source/Path.hx
+
+          # options.Option — explicit import beats the js.html.* wildcard
+          grep -rl "new Option(" source --include="*.hx" \
+            | grep -v "source/options/Option.hx" \
+            | xargs -r sed -i '/^package /a import options.Option;'
+
+          # ── C: discord / lua / cpp stubs ────────────────────────────────────
           sed -i -e '/discord_rpc/d' -e '/discord-rpc/d' -e '/linc_luajit/d' -e '/DISCORD_ALLOWED/d' Project.xml || true
 
-          # Stub hxdiscord_rpc package
           mkdir -p source/hxdiscord_rpc
-          printf 'package hxdiscord_rpc;\nclass Discord {\n  public static function Initialize(a:String,b:Bool,c:Dynamic){}\n  public static function Shutdown(){}\n  public static function RunCallbacks(){}\n  public static function UpdatePresence(a:Dynamic){}\n  public static function ClearPresence(){}\n}\n' > source/hxdiscord_rpc/Discord.hx
-          printf 'package hxdiscord_rpc;\nclass Types {\n  public static inline var DISCORD_REPLY_NO=0;\n  public static inline var DISCORD_REPLY_YES=1;\n  public static inline var DISCORD_REPLY_IGNORE=2;\n}\n' > source/hxdiscord_rpc/Types.hx
+          printf 'package hxdiscord_rpc;\nclass Discord { public static function Initialize(a:String,b:Bool,c:Dynamic){} public static function Shutdown(){} public static function RunCallbacks(){} public static function UpdatePresence(a:Dynamic){} public static function ClearPresence(){} }\n' > source/hxdiscord_rpc/Discord.hx
+          printf 'package hxdiscord_rpc;\nclass Types { public static inline var DISCORD_REPLY_NO=0; public static inline var DISCORD_REPLY_YES=1; public static inline var DISCORD_REPLY_IGNORE=2; }\n' > source/hxdiscord_rpc/Types.hx
           printf 'package hxdiscord_rpc;\ntypedef DiscordPresence = Dynamic;\n' > source/hxdiscord_rpc/DiscordPresence.hx
           printf 'package hxdiscord_rpc;\ntypedef DiscordRichPresence = Dynamic;\n' > source/hxdiscord_rpc/DiscordRichPresence.hx
 
-          # Replace engine Discord backend with complete no-op matching the engine API
           printf 'package backend;\nclass DiscordClient {\n  public static var isInitialized:Bool = false;\n  public static function initialize() {}\n  public static function shutdown() {}\n  public static function prepare() {}\n  public static function check() {}\n  public static function resetClientID(?id:String) {}\n  public static function changePresence(details:String, ?state:String, ?smallImageKey:String, ?hasStartTimestamp:Bool, ?endTimestamp:Float) {}\n}\n' > source/backend/Discord.hx
 
-          # Patch all source files:
-          # 1. Remove all import sys.* lines (blocked by HTML5 target)
-          # 2. Replace sys.* usages with Hx-prefixed stub names
-          # 3. Fix other misc HTML5 incompatibilities
-          # import.hx has 'import js.html.*' for JS target, which makes bare 'Option'
-          # resolve to js.html.OptionElement instead of options.Option. Fix by adding
-          # an explicit import (explicit beats wildcard) to every file that uses new Option().
-          grep -rl "new Option(" source --include="*.hx" | grep -v "source/options/Option.hx" | xargs -r sed -i '/^package /a import options.Option;'
-
-          # Path typedef: lets bare 'Path' resolve to haxe.io.Path without sed replacement.
-          # Sed replacement caused double-substitution on lines already using haxe.io.Path.*.
-          printf 'typedef Path = haxe.io.Path;\n' > source/Path.hx
-
+          # ── Bulk source sed ─────────────────────────────────────────────────
           find source -name "*.hx" -type f -exec sed -i \
             -e '/import sys\./d' \
             -e 's/sys\.FileSystem/HxFileSystem/g' \
@@ -150,42 +158,35 @@ jobs:
             -e 's/FlxG\.error(/trace(/g' \
             {} +
 
-          find . -name "FlxSoundTray.hx" -type f -exec sed -i 's/public function new(/public function showIncrement() { show(); } public function showDecrement() { show(); }\n\n&/g' {} +
+          # FlxSoundTray needs stub methods added before its constructor
+          find . -name "FlxSoundTray.hx" -type f -exec sed -i \
+            's/public function new(/public function showIncrement() { show(); } public function showDecrement() { show(); }\n\n&/g' {} +
 
-      - name: Optimization & Web Compile Build
+      # ── 5. Build ────────────────────────────────────────────────────────────
+      - name: Build HTML5
         run: |
           cd engine-source
-          # Adds flags to make HTML5 compile lightweight as requested
           haxelib run lime build html5 -release -D DISCORD_DISABLE -D NO_PRELOAD_ALL
 
-      - name: Package Flat ZIP & Standardize output
+      # ── 6. Package & publish ─────────────────────────────────────────────────
+      - name: Package
         run: |
           cd engine-source/export/release/html5/bin
-          
-          # Rename main engine JS file to funkin.js for easier jsDelivr/CDN embedding
-          MAIN_JS=$(ls *.js | grep -E -v 'howler|pako' | head -n 1)
+          MAIN_JS=$(ls *.js | grep -Ev 'howler|pako' | head -n 1)
           if [ -n "$MAIN_JS" ] && [ "$MAIN_JS" != "funkin.js" ]; then
             mv "$MAIN_JS" funkin.js
-            # Update index.html to use the new JS filename
-            if [ -f "index.html" ]; then
-              sed -i "s/$MAIN_JS/funkin.js/g" index.html
-            fi
+            [ -f index.html ] && sed -i "s/$MAIN_JS/funkin.js/g" index.html
           fi
-          
-          # Ensure index.html exists fallback
-          if [ ! -f "index.html" ]; then
-            echo "<!DOCTYPE html><html><body><h1>FNF Web Build</h1><script src='funkin.js'></script></body></html>" > index.html
-          fi
-          
+          [ ! -f index.html ] && printf '<!DOCTYPE html><html><body><script src="funkin.js"></script></body></html>' > index.html
           zip -r ../../../../../web_export.zip *
 
-      - name: Upload Web Export
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: web-export
           path: web_export.zip
 
-      - name: Auto-Publish to GitHub Branch
+      - name: Publish to web-build Branch
         run: |
           cd engine-source/export/release/html5/bin
           git init
