@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	
+	<meta charset="utf-8">
+	
+	<title>Friday Night Funkin': Psych Engine</title>
+	
+	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	
+	
+	<link rel="shortcut icon" type="image/png" href="./favicon.png">
+	
+	
+	<script type="text/javascript" src="./funkin.js"></script>
+	
+	<script>
+		window.addEventListener ("touchmove", function (event) { event.preventDefault (); }, { capture: false, passive: false });
+		if (typeof window.devicePixelRatio != 'undefined' && window.devicePixelRatio > 2) {
+			var meta = document.getElementById ("viewport");
+			meta.setAttribute ('content', 'width=device-width, initial-scale=' + (2 / window.devicePixelRatio) + ', user-scalable=no');
+		}
+	</script>
+	
+	<style>
+		html,body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+		#openfl-content { background: #000000; width: 100%; height: 100%; }
+		@font-face {
+			font-family: 'Pixel Arial 11 Bold Latin';
+			src: url('assets/fonts/pixel-latin.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'VCR OSD Mono';
+			src: url('assets/fonts/vcr.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans Regular';
+			src: url('mods/assets/fonts/noto.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans Bold';
+			src: url('mods/assets/fonts/notoBold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Apple Kid Regular';
+			src: url('mods/assets/fonts/apple_kid.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Impact';
+			src: url('mods/assets/fonts/impact.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans Thai Regular';
+			src: url('mods/assets/fonts/th.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Dum Regular';
+			src: url('mods/assets/fonts/Dum-Regular.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Amatic SC Regular';
+			src: url('mods/assets/fonts/AmaticSC-Regular.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans TC Bold';
+			src: url('mods/assets/fonts/tcBold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans Arabic Regular';
+			src: url('mods/assets/fonts/ar.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans JP Bold';
+			src: url('mods/assets/fonts/jpBold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans Arabic Bold';
+			src: url('mods/assets/fonts/arBold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Handjet Regular';
+			src: url('mods/assets/fonts/Handjet-VariableFont_ELGR,ELSH,wght.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans TC Regular';
+			src: url('mods/assets/fonts/tc.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Comic Sans MS';
+			src: url('mods/assets/fonts/comic.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Amatic SC Bold';
+			src: url('mods/assets/fonts/AmaticSC-Bold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Pixel Arial 11 Bold';
+			src: url('mods/assets/fonts/pixel.otf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans KR Bold';
+			src: url('mods/assets/fonts/krBold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'VCR / VHS Regular Scaled';
+			src: url('mods/assets/fonts/vcr-srb.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Arial';
+			src: url('mods/assets/fonts/arial.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Be Vietnam Pro SemiBold';
+			src: url('mods/assets/fonts/BeVietnamPro-SemiBold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'ZQBBT_T';
+			src: url('mods/assets/fonts/zh_zqbbt.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans Thai Bold';
+			src: url('mods/assets/fonts/thBold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Liberation Sans Regular';
+			src: url('mods/assets/fonts/liber.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+
+		@font-face {
+			font-family: 'VCR OSD Mono';
+			src: url('mods/assets/fonts/vcr.eot');
+			src: url('mods/assets/fonts/vcr.eot?#iefix') format('embedded-opentype'),
+			url('mods/assets/fonts/vcr.svg#my-font-family') format('svg'),
+			url('mods/assets/fonts/vcr.woff') format('woff'),
+			url('mods/assets/fonts/vcr.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}		@font-face {
+			font-family: 'TH Sarabun New';
+			src: url('mods/assets/fonts/th2.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Gowun Dodum Regular';
+			src: url('mods/assets/fonts/kr.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans SC ExtraBold';
+			src: url('mods/assets/fonts/NotoSansSC-ExtraBold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Comic Sans MS Bold';
+			src: url('mods/assets/fonts/comicbd.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans SC SemiBold';
+			src: url('mods/assets/fonts/NotoSansSC-SemiBold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Be Vietnam Pro Regular';
+			src: url('mods/assets/fonts/BeVietnamPro-Regular.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'FZLanTingHeiS-DB-GB';
+			src: url('mods/assets/fonts/zhcn.otf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Noto Sans JP Regular';
+			src: url('mods/assets/fonts/jp.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Arial Black';
+			src: url('mods/assets/fonts/ariblk.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Liberation Sans Bold';
+			src: url('mods/assets/fonts/liberbold.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Nokia Cellphone FC Small';
+			src: url('flixel/fonts/nokiafc22.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Monsterrat';
+			src: url('flixel/fonts/monsterrat.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+
+	</style>
+	
+</head>
+<body>
+	
+	<noscript>This webpage makes extensive use of JavaScript. Please enable JavaScript in your web browser to view this page.</noscript>
+	
+	<div id="openfl-content"></div>
+	
+	<script type="text/javascript">
+		lime.embed ("PsychEngine", "openfl-content", 1280, 720, { parameters: {} });
+	</script>
+	
+</body>
+</html>
