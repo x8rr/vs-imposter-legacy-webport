@@ -36,48 +36,73 @@ jobs:
           unzip -q mod-payload.zip -d mods_upload/
           rm mod-payload.zip
 
+      # Place the mod into example_mods/<Name>/, which PsychEngine bakes into
+      # the runtime mods/ folder. We do NOT flatten into assets/shared anymore —
+      # the engine's own mod loader (enabled for HTML5 in the Patch step) reads
+      # mods/ via the FileSystem->openfl.Assets stubs. This generalizes to any
+      # well-formed Psych mod regardless of zip layout.
       - name: Inject Mod
         run: |
-          echo "=== mods_upload tree (depth 6) ===" && find mods_upload -maxdepth 6 -type d | head -80
-          # Use weekList.txt as the definitive mod root indicator.
-          # weekList.txt lives at mod_root/weeks/weekList.txt, so its grandparent is mod_root.
-          # Fall back to weeks/ directory if no weekList.txt found.
-          mapfile -t mod_roots < <(
-            find mods_upload -name "weekList.txt" -printf '%h\n' \
-              | sed 's|/weeks$||' \
-              | sort -u
-          )
-          if [ ${#mod_roots[@]} -eq 0 ]; then
-            echo "No weekList.txt found, falling back to weeks/ directory search..."
-            mapfile -t mod_roots < <(
-              find mods_upload -type d -name "weeks" \
-                | grep -v '/images/' \
-                | sed 's|/weeks$||' \
-                | sort -u
-            )
-          fi
-          if [ ${#mod_roots[@]} -eq 0 ]; then
-            echo "ERROR: no mod asset folders found anywhere in zip" && exit 1
-          fi
-          for mod_dir in "${mod_roots[@]}"; do
-            echo "Injecting from: $mod_dir"
-            for sub in characters data images music sounds weeks stages events; do
-              if [ -d "${mod_dir}/${sub}" ]; then
-                echo "  Copying ${sub}/"
-                mkdir -p "engine-source/assets/shared/${sub}"
-                cp -r "${mod_dir}/${sub}/." "engine-source/assets/shared/${sub}/"
-              fi
+          set -e
+          echo "=== mods_upload tree (depth 6) ===" && find mods_upload -maxdepth 6 -type d | head -120
+
+          ENGINE_MODS="engine-source/example_mods"
+          # Drop PsychEngine's bundled example mods so only the user's mod loads.
+          rm -rf "$ENGINE_MODS"
+          mkdir -p "$ENGINE_MODS"
+
+          # Folder names that are mod-internal asset categories, never mod roots.
+          RESERVED="characters songs stages weeks data images music sounds scripts videos fonts achievements custom_events custom_notetypes shaders states substates"
+          is_reserved() { local n="${1,,}"; for r in $RESERVED; do [ "$n" = "$r" ] && return 0; done; return 1; }
+
+          declare -a MODFOLDERS
+
+          # Strategy 1: zip contains a 'mods' directory -> each non-reserved child is a mod.
+          while IFS= read -r modsdir; do
+            for child in "$modsdir"/*/; do
+              [ -d "$child" ] || continue
+              is_reserved "$(basename "$child")" && continue
+              MODFOLDERS+=("${child%/}")
             done
-            if [ -d "${mod_dir}/songs" ]; then
-              echo "  Copying songs/"
-              mkdir -p engine-source/assets/songs
-              cp -rn "${mod_dir}/songs/." engine-source/assets/songs/
-            fi
+          done < <(find mods_upload -type d -name mods)
+
+          # Strategy 2: no mods/ dir -> a folder containing pack.json is a mod root.
+          if [ ${#MODFOLDERS[@]} -eq 0 ]; then
+            while IFS= read -r pj; do
+              MODFOLDERS+=("$(dirname "$pj")")
+            done < <(find mods_upload -name pack.json -not -path '*/images/*')
+          fi
+
+          # Strategy 3: still nothing -> the dir holding weeks/ or data/ (not inside
+          # images/) is treated as a single mod root.
+          if [ ${#MODFOLDERS[@]} -eq 0 ]; then
+            root=$(find mods_upload -type d \( -name weeks -o -name data \) \
+              | grep -v '/images/' | sed 's|/[^/]*$||' | sort -u | head -1)
+            [ -n "$root" ] && MODFOLDERS+=("$root")
+          fi
+
+          if [ ${#MODFOLDERS[@]} -eq 0 ]; then
+            echo "ERROR: could not locate any mod content in zip" && exit 1
+          fi
+
+          # De-duplicate.
+          mapfile -t MODFOLDERS < <(printf '%s\n' "${MODFOLDERS[@]}" | sort -u)
+
+          # Copy each detected mod into example_mods/<Name> and enable it in list.txt.
+          : > engine-source/list.txt
+          for mf in "${MODFOLDERS[@]}"; do
+            name="$(basename "$mf")"
+            echo "Mod: '$mf' -> mods/$name"
+            mkdir -p "$ENGINE_MODS/$name"
+            cp -r "$mf/." "$ENGINE_MODS/$name/"
+            printf '%s|1\n' "$name" >> engine-source/list.txt
           done
-          echo "=== detected mod roots ===" && printf '%s\n' "${mod_roots[@]}"
-          echo "=== weeks dir after inject ===" && ls -la engine-source/assets/shared/weeks/ 2>/dev/null || echo "NO WEEKS FOUND"
-          echo "=== weekList.txt contents ===" && cat engine-source/assets/shared/weeks/weekList.txt 2>/dev/null || echo "NO weekList.txt"
-          echo "=== storymenu images ===" && ls engine-source/assets/shared/images/storymenu/ 2>/dev/null || echo "NO storymenu images"
+
+          echo "=== example_mods (baked to mods/) ===" && ls -la "$ENGINE_MODS"
+          for d in "$ENGINE_MODS"/*/; do
+            echo "--- $d ---" && ls "$d"
+          done
+          echo "=== list.txt (-> modsList.txt) ===" && cat engine-source/list.txt
 
       - name: Disable Videos
         run: find . -name "*.mp4" -type f -exec mv {} {}.disabled \;
@@ -160,6 +185,14 @@ jobs:
 
           # ── C: discord / lua / cpp stubs ────────────────────────────────────
           sed -i -e '/discord_rpc/d' -e '/discord-rpc/d' -e '/linc_luajit/d' -e '/DISCORD_ALLOWED/d' Project.xml || true
+
+          # ── C2: enable the mod system on HTML5 ──────────────────────────────
+          # Flips MODS_ALLOWED + HSCRIPT_ALLOWED from desktop-only to always-on,
+          # turns the example_mods folder into a real (non-template) asset so
+          # openfl.Assets can see the injected mod, and stops excluding .ogg on
+          # web so mod audio embeds. Script is base64'd to avoid YAML quoting.
+          echo 'aW1wb3J0IHJlLCBzeXMKCnAgPSAnUHJvamVjdC54bWwnCnMgPSBvcGVuKHApLnJlYWQoKQpvcmlnID0gcwoKIyAxKSBFbmFibGUgbW9kIHN5c3RlbSArIGhzY3JpcHQgb24gZXZlcnkgdGFyZ2V0ICh3YXMgZGVza3RvcC1vbmx5KQpzID0gcy5yZXBsYWNlKCc8ZGVmaW5lIG5hbWU9Ik1PRFNfQUxMT1dFRCIgaWY9ImRlc2t0b3AiIC8+JywKICAgICAgICAgICAgICAnPGRlZmluZSBuYW1lPSJNT0RTX0FMTE9XRUQiIC8+JykKcyA9IHMucmVwbGFjZSgnPGRlZmluZSBuYW1lPSJIU0NSSVBUX0FMTE9XRUQiIGlmPSJkZXNrdG9wIiAvPicsCiAgICAgICAgICAgICAgJzxkZWZpbmUgbmFtZT0iSFNDUklQVF9BTExPV0VEIiAvPicpCgojIDIpIFJlbW92ZSB0aGUgdHdvIHRlbXBsYXRlLWJhc2VkIGV4YW1wbGVfbW9kcyBsaW5lcyAoaW52aXNpYmxlIHRvIEFzc2V0cy5saXN0IG9uIHdlYikKcyA9IHJlLnN1YihyJ1sgXHRdKjxhc3NldHMgcGF0aD1cJ2V4YW1wbGVfbW9kc1wnLipcbicsICcnLCBzKQoKIyAzKSBBZGQgZXhhbXBsZV9tb2RzIGFzIGEgcmVhbCwgcHJlbG9hZGVkIG1hbmlmZXN0IGFzc2V0IChyZW5hbWVkIHRvIG1vZHMvKQojICAgIHNvIG9wZW5mbC51dGlscy5Bc3NldHMubGlzdCgpL2dldFRleHQoKSBjYW4gc2VlIHRoZSBpbmplY3RlZCBtb2QuCm1hcmtlciA9ICI8YXNzZXRzIHBhdGg9J2xpc3QudHh0JyByZW5hbWU9J21vZHNMaXN0LnR4dCcgLz4iCmluamVjdCA9ICgiPGFzc2V0cyBwYXRoPSdleGFtcGxlX21vZHMnIHJlbmFtZT0nbW9kcycgLz5cbiIKICAgICAgICAgICJcdFx0IiArIG1hcmtlcikKcyA9IHMucmVwbGFjZShtYXJrZXIsIGluamVjdCkKCiMgNCkgSW5jbHVkZSAub2dnIGF1ZGlvIG9uIHdlYiAoRk5GIG1vZHMgc2hpcCBvZ2cpLiBEcm9wIHRoZSB3ZWIgb2dnLWV4Y2x1c2lvbnMKIyAgICBmb3Igc29uZ3MgYW5kIHNoYXJlZCBzbyBtb2QgYXVkaW8gYWN0dWFsbHkgZW1iZWRzLgpzID0gcy5yZXBsYWNlKCc8YXNzZXRzIHBhdGg9ImFzc2V0cy9zb25ncyIgICAgICAgICBleGNsdWRlPSIqLm9nZyIgaWY9IndlYiIvPicsCiAgICAgICAgICAgICAgJzxhc3NldHMgcGF0aD0iYXNzZXRzL3NvbmdzIiAgICAgICAgIGlmPSJ3ZWIiLz4nKQpzID0gcy5yZXBsYWNlKCc8YXNzZXRzIHBhdGg9ImFzc2V0cy9zaGFyZWQiICAgICAgICBleGNsdWRlPSIqLm9nZyIgaWY9IndlYiIvPicsCiAgICAgICAgICAgICAgJzxhc3NldHMgcGF0aD0iYXNzZXRzL3NoYXJlZCIgICAgICAgIGlmPSJ3ZWIiLz4nKQoKaWYgcyA9PSBvcmlnOgogICAgc3lzLnN0ZGVyci53cml0ZSgnV0FSTklORzogUHJvamVjdC54bWwgdW5jaGFuZ2VkIC0gcGF0dGVybnMgZGlkIG5vdCBtYXRjaCFcbicpCiAgICBzeXMuZXhpdCgxKQoKb3BlbihwLCAndycpLndyaXRlKHMpCnByaW50KCdQcm9qZWN0LnhtbCBwYXRjaGVkIE9LJykKZm9yIGxpbmUgaW4gcy5zcGxpdGxpbmVzKCk6CiAgICBpZiBhbnkoayBpbiBsaW5lIGZvciBrIGluICgnTU9EU19BTExPV0VEJywgJ0hTQ1JJUFRfQUxMT1dFRCcsICdleGFtcGxlX21vZHMnLCAnbW9kc0xpc3QnLCAnYXNzZXRzL3NvbmdzJykpOgogICAgICAgIHByaW50KCcgICcgKyBsaW5lLnN0cmlwKCkpCg==' | base64 -d > /tmp/projpatch.py
+          python3 /tmp/projpatch.py
           mkdir -p source/hxdiscord_rpc
           printf 'package hxdiscord_rpc;\nclass Discord { public static function Initialize(a:String,b:Bool,c:Dynamic){} public static function Shutdown(){} public static function RunCallbacks(){} public static function UpdatePresence(a:Dynamic){} public static function ClearPresence(){} }\n' > source/hxdiscord_rpc/Discord.hx
           printf 'package hxdiscord_rpc;\nclass Types { public static inline var DISCORD_REPLY_NO=0; public static inline var DISCORD_REPLY_YES=1; public static inline var DISCORD_REPLY_IGNORE=2; }\n' > source/hxdiscord_rpc/Types.hx
@@ -221,7 +254,10 @@ jobs:
       - name: Build HTML5
         run: |
           cd engine-source
-          haxelib run lime build html5 -release -D DISCORD_DISABLE -D NO_PRELOAD_ALL
+          # NO_PRELOAD_ALL is intentionally omitted: PsychEngine reads mod JSON/txt
+          # synchronously via openfl.Assets.getText, which only works for preloaded
+          # assets on HTML5. Without preload the mod data reads back empty.
+          haxelib run lime build html5 -release -D DISCORD_DISABLE
 
       # ── 6. Package & publish ─────────────────────────────────────────────────
       - name: Package
