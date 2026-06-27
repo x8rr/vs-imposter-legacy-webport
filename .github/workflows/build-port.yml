@@ -209,6 +209,9 @@ jobs:
           # grpWeekCharacters changeCharacter: guard weekArray index
           sed -i 's/grpWeekCharacters\.members\[i\]\.changeCharacter(weekArray\[i\]);/grpWeekCharacters.members[i].changeCharacter(i < weekArray.length \&\& weekArray[i] != null ? weekArray[i] : "");/g' \
             source/states/StoryMenuState.hx
+          # selectWeek(): null-guard songs array before .length
+          sed -i 's/var leWeek:Array<Dynamic> = loadedWeeks\[curWeek\]\.songs;/var leWeek:Array<Dynamic> = (loadedWeeks[curWeek].songs != null ? loadedWeeks[curWeek].songs : []);/g' \
+            source/states/StoryMenuState.hx
 
           # FlxSoundTray needs stub methods added before its constructor
           find . -name "FlxSoundTray.hx" -type f -exec sed -i \
