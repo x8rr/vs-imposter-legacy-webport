@@ -74,7 +74,10 @@ jobs:
               cp -rn "${mod_dir}/songs/." engine-source/assets/songs/
             fi
           done
-          echo "=== weeks after inject ===" && ls engine-source/assets/shared/weeks/ 2>/dev/null || echo "NO WEEKS FOUND"
+          echo "=== detected mod roots ===" && printf '%s\n' "${mod_roots[@]}"
+          echo "=== weeks dir after inject ===" && ls -la engine-source/assets/shared/weeks/ 2>/dev/null || echo "NO WEEKS FOUND"
+          echo "=== weekList.txt contents ===" && cat engine-source/assets/shared/weeks/weekList.txt 2>/dev/null || echo "NO weekList.txt"
+          echo "=== storymenu images ===" && ls engine-source/assets/shared/images/storymenu/ 2>/dev/null || echo "NO storymenu images"
 
       - name: Disable Videos
         run: find . -name "*.mp4" -type f -exec mv {} {}.disabled \;
@@ -195,6 +198,16 @@ jobs:
             source/states/StoryMenuState.hx
           # Null-guard weekCharacters (absent in older mod week JSONs)
           sed -i 's/loadedWeeks\[0\]\.weekCharacters;/(loadedWeeks[0].weekCharacters != null ? loadedWeeks[0].weekCharacters : []);/g' \
+            source/states/StoryMenuState.hx
+          # updateText(): null-guard weekCharacters and songs arrays
+          sed -i 's/var weekArray:Array<String> = loadedWeeks\[curWeek\]\.weekCharacters;/var weekArray:Array<String> = (loadedWeeks[curWeek].weekCharacters != null ? loadedWeeks[curWeek].weekCharacters : []);/g' \
+            source/states/StoryMenuState.hx
+          sed -i 's/for (i in 0...leWeek\.songs\.length) {/for (i in 0...(leWeek.songs != null ? leWeek.songs.length : 0)) {/g' \
+            source/states/StoryMenuState.hx
+          sed -i 's/stringThing\.push(leWeek\.songs\[i\]\[0\]);/stringThing.push(leWeek.songs[i] != null ? leWeek.songs[i][0] : "");/g' \
+            source/states/StoryMenuState.hx
+          # grpWeekCharacters changeCharacter: guard weekArray index
+          sed -i 's/grpWeekCharacters\.members\[i\]\.changeCharacter(weekArray\[i\]);/grpWeekCharacters.members[i].changeCharacter(i < weekArray.length \&\& weekArray[i] != null ? weekArray[i] : "");/g' \
             source/states/StoryMenuState.hx
 
           # FlxSoundTray needs stub methods added before its constructor
