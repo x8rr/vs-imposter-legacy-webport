@@ -190,9 +190,24 @@ jobs:
           # Also null-guard leWeek itself in case a weeksList entry has no matching JSON
           find source -name "StoryMenuState.hx" -exec perl -i \
             -pe 's/function weekIsLocked\(name:String\):Bool \{/function weekIsLocked(name:String):Bool { var _lw = WeekData.weeksLoaded.get(name); if (_lw == null) return false;/g' {} +
-          # weekCharacters / songs may be null in older mods — default to empty array
-          find source -name "StoryMenuState.hx" -exec perl -i \
-            -pe 's/= (loadedWeeks\[0\]\.weekCharacters|leWeek\.weekCharacters|weekFile\.weekCharacters);/= (($1) != null ? ($1) : []);/g' {} +
+          # weekCharacters may be null in older mods — patch with python for exact match
+          python3 - <<'PYEOF'
+import re, glob
+for path in glob.glob('source/**/StoryMenuState.hx', recursive=True):
+    src = open(path).read()
+    # Null-guard weekCharacters array
+    src = src.replace(
+        'loadedWeeks[0].weekCharacters;',
+        '(loadedWeeks[0].weekCharacters != null ? loadedWeeks[0].weekCharacters : cast []);'
+    )
+    # Null-guard charArray[char] access — replace with safe access
+    src = src.replace(
+        'charArray[char]',
+        '(charArray != null && charArray.length > char ? charArray[char] : "")'
+    )
+    open(path, 'w').write(src)
+    print('Patched', path)
+PYEOF
 
           # FlxSoundTray needs stub methods added before its constructor
           find . -name "FlxSoundTray.hx" -type f -exec sed -i \
